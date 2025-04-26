@@ -14,7 +14,7 @@ runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04
 To set up ComfyUI on your RunPod instance, run the following command:
 
 ```bash
-sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/yourusername/comfyui-setup/main/bootstrap.sh)"
+sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/richowen/comfyui/main/bootstrap.sh)"
 ```
 
 This one-liner will:

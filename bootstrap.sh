@@ -33,7 +33,7 @@ if ! command_exists wget; then
 fi
 
 # URL of the main setup script
-SETUP_SCRIPT_URL="https://raw.githubusercontent.com/yourusername/comfyui-setup/main/comfyui-setup.sh"
+SETUP_SCRIPT_URL="https://raw.githubusercontent.com/richowen/comfyui/main/comfyui-setup.sh"
 
 # Download the main setup script
 echo -e "${BLUE}Downloading main setup script...${NC}"
