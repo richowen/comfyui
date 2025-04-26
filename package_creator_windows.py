@@ -279,8 +279,8 @@ def get_civitai_api_key():
                 config = json.load(f)
                 if config.get("api_key"):
                     return config["api_key"]
-        except:
-            pass
+        except Exception as e:
+            print(f"Error reading config file: {e}")
     
     return None
 
@@ -496,7 +496,10 @@ if __name__ == "__main__":
                 zipf.write(file_path, arcname)
     
     print(f"\nPackage created successfully in {zip_path}")
-    print(f"Package directory: {temp_dir}")
+    
+    # Clean up the unzipped package directory to avoid leaving it behind
+    print(f"Cleaning up temporary directory...")
+    shutil.rmtree(temp_dir)
     
     return True
 
