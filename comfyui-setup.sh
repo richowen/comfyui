@@ -2,6 +2,11 @@
 # ComfyUI RunPod Setup Script
 # Provides a TUI for configuring and installing ComfyUI with various options
 
+# Force proper encoding
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export PYTHONIOENCODING=utf-8
+
 set -e
 trap 'echo "An error occurred. Exiting..."; exit 1' ERR
 
@@ -65,7 +70,10 @@ clone_comfyui() {
 install_requirements() {
     echo -e "${BLUE}Installing Python requirements...${NC}"
     cd "$COMFYUI_DIR"
-    pip3 install -r requirements.txt
+    
+    # Set encoding for pip processes
+    PYTHONIOENCODING=utf-8 pip3 install -r requirements.txt
+    
     echo -e "${GREEN}Python requirements installed.${NC}"
 }
 
@@ -87,19 +95,19 @@ install_extensions() {
                 echo -e "${BLUE}Installing ControlNet nodes...${NC}"
                 cd "$CUSTOM_NODES_DIR"
                 git clone https://github.com/Fannovel16/comfyui_controlnet_aux.git
-                pip3 install -r "$CUSTOM_NODES_DIR/comfyui_controlnet_aux/requirements.txt"
+                PYTHONIOENCODING=utf-8 pip3 install -r "$CUSTOM_NODES_DIR/comfyui_controlnet_aux/requirements.txt"
                 ;;
             "ReActor")
                 echo -e "${BLUE}Installing ReActor nodes...${NC}"
                 cd "$CUSTOM_NODES_DIR"
                 git clone https://github.com/Gourieff/comfyui-reactor-node.git
-                pip3 install -r "$CUSTOM_NODES_DIR/comfyui-reactor-node/requirements.txt"
+                PYTHONIOENCODING=utf-8 pip3 install -r "$CUSTOM_NODES_DIR/comfyui-reactor-node/requirements.txt"
                 ;;
             "Impact-Pack")
                 echo -e "${BLUE}Installing Impact Pack...${NC}"
                 cd "$CUSTOM_NODES_DIR"
                 git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git
-                pip3 install -r "$CUSTOM_NODES_DIR/ComfyUI-Impact-Pack/requirements.txt"
+                PYTHONIOENCODING=utf-8 pip3 install -r "$CUSTOM_NODES_DIR/ComfyUI-Impact-Pack/requirements.txt"
                 ;;
             "Efficiency-Nodes")
                 echo -e "${BLUE}Installing Efficiency Nodes...${NC}"
@@ -113,7 +121,7 @@ install_extensions() {
                     git clone "$extension"
                     extension_dir=$(basename "$extension" .git)
                     if [ -f "$CUSTOM_NODES_DIR/$extension_dir/requirements.txt" ]; then
-                        pip3 install -r "$CUSTOM_NODES_DIR/$extension_dir/requirements.txt"
+                        PYTHONIOENCODING=utf-8 pip3 install -r "$CUSTOM_NODES_DIR/$extension_dir/requirements.txt"
                     fi
                 fi
                 ;;
@@ -209,7 +217,7 @@ download_custom_package() {
         if [ $? -eq 0 ]; then
             echo -e "${BLUE}Downloading external models...${NC}"
             cd "$COMFYUI_DIR"
-            python3 download_models.py
+            PYTHONIOENCODING=utf-8 python3 download_models.py
         else
             echo -e "${YELLOW}Skipping external model downloads. You can run the downloader later with:${NC}"
             echo -e "cd $COMFYUI_DIR && python3 download_models.py"
@@ -225,14 +233,14 @@ download_custom_package() {
                 if [[ "$dep" == pip:* ]]; then
                     local pip_package=${dep#pip:}
                     echo -e "${BLUE}Installing pip package: $pip_package${NC}"
-                    pip3 install "$pip_package"
+                    PYTHONIOENCODING=utf-8 pip3 install "$pip_package"
                 elif [[ "$dep" == apt:* ]]; then
                     local apt_package=${dep#apt:}
                     echo -e "${BLUE}Installing apt package: $apt_package${NC}"
                     apt-get install -y "$apt_package"
                 else
                     echo -e "${BLUE}Installing dependency: $dep${NC}"
-                    pip3 install "$dep"
+                    PYTHONIOENCODING=utf-8 pip3 install "$dep"
                 fi
             done
         fi
@@ -246,7 +254,7 @@ download_custom_package() {
                 echo -e "${BLUE}Processing external models from config.json...${NC}"
                 if ! python3 -c "import requests" >/dev/null 2>&1; then
                     echo -e "${YELLOW}Installing Python requests module...${NC}"
-                    pip3 install requests
+                    PYTHONIOENCODING=utf-8 pip3 install requests
                 fi
                 local model_count=$(jq '.external_models | length' "$temp_dir/extracted/config.json")
                 echo -e "${BLUE}Found $model_count external models to download${NC}"
@@ -306,6 +314,10 @@ create_launch_script() {
 #!/bin/bash
 # ComfyUI Launch Script
 
+# Set proper encoding
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export PYTHONIOENCODING=utf-8
 export CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
 
 cd "$COMFYUI_DIR"
