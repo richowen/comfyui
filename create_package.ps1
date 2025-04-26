@@ -106,7 +106,7 @@ if ($useCivitaiKey) {
     }
 }
 
-# --- Create Package ---
+# --- Prepare for Package Creation ---
 Write-Host ""
 Write-Host "Creating package from:"
 Write-Host "  $workflowPath"
@@ -114,6 +114,31 @@ Write-Host "Using ComfyUI at: $comfyuiPath"
 Write-Host "Output will be: $saveDir\$outputName.zip"
 Write-Host ""
 
+# Create temporary package directory
+$packageDir = Join-Path (Get-Location) $outputName
+if (Test-Path $packageDir -PathType Container) {
+    Remove-Item -Path $packageDir -Recurse -Force
+}
+New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+
+# --- Save API Key to Package and Current Directory before package creation ---
+if ($global:saveApiKeyToPackage -and $global:apiKeyForPackage) {
+    $civitaiConfig = @{
+        "api_key" = $global:apiKeyForPackage
+    } | ConvertTo-Json
+    
+    # Save to package directory (will be included in the zip)
+    $civitaiConfigPath = Join-Path $packageDir "civitai_config.json"
+    Set-Content -Path $civitaiConfigPath -Value $civitaiConfig
+    Write-Host "Saved Civitai API key to package configuration." -ForegroundColor Green
+    
+    # Also save to current working directory for download_models.py
+    $rootCivitaiConfigPath = Join-Path (Get-Location) "civitai_config.json"
+    Set-Content -Path $rootCivitaiConfigPath -Value $civitaiConfig
+    Write-Host "Saved Civitai API key to current directory for model downloads." -ForegroundColor Green
+}
+
+# --- Create Package ---
 $pythonExe = "python"
 $pythonArgs = @(
     "package_creator_windows.py"
@@ -129,26 +154,6 @@ $proc = Start-Process -FilePath $pythonExe -ArgumentList $pythonArgs -Wait -NoNe
 if ($proc.ExitCode -ne 0) {
     Write-Host "`n[FAIL] Package creation failed." -ForegroundColor Red
     exit 1
-}
-
-# --- Save API Key to Package ---
-if ($global:saveApiKeyToPackage -and $global:apiKeyForPackage) {
-    # Save to package directory
-    $packageDir = Join-Path (Get-Location) $outputName
-    if (Test-Path $packageDir -PathType Container) {
-        $civitaiConfigPath = Join-Path $packageDir "civitai_config.json"
-        $civitaiConfig = @{
-            "api_key" = $global:apiKeyForPackage
-        } | ConvertTo-Json
-        
-        Set-Content -Path $civitaiConfigPath -Value $civitaiConfig
-        Write-Host "Saved Civitai API key to package configuration." -ForegroundColor Green
-    }
-    
-    # Also save to current working directory for download_models.py
-    $rootCivitaiConfigPath = Join-Path (Get-Location) "civitai_config.json"
-    Set-Content -Path $rootCivitaiConfigPath -Value $civitaiConfig
-    Write-Host "Saved Civitai API key to current directory for model downloads." -ForegroundColor Green
 }
 
 # --- Move ZIP to Save Directory ---
