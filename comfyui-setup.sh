@@ -234,11 +234,20 @@ with zipfile.ZipFile('$package_file', 'r') as zip_ref:
             return 1
         fi
     fi
+    WORKFLOWS_USER_DIR="$COMFYUI_DIR/user/default/workflows"
+    mkdir -p "$WORKFLOWS_USER_DIR"
     if [ -d "$temp_dir/extracted/workflows" ]; then
-        cp -r "$temp_dir/extracted/workflows/"* "$WORKFLOWS_DIR/"
+    cp -r "$temp_dir/extracted/workflows/"* "$WORKFLOWS_USER_DIR/"
     fi
     if [ -d "$temp_dir/extracted/custom_nodes" ]; then
         cp -r "$temp_dir/extracted/custom_nodes/"* "$CUSTOM_NODES_DIR/"
+        
+        # Install requirements for all custom nodes
+        echo -e "${BLUE}Installing requirements for custom nodes...${NC}"
+        find "$CUSTOM_NODES_DIR" -type f -name "requirements.txt" | while read reqfile; do
+            echo -e "${BLUE}Installing dependencies for: $(dirname "$reqfile")${NC}"
+            PYTHONIOENCODING=utf-8 pip3 install -r "$reqfile"
+        done
     fi
     if [ -d "$temp_dir/extracted/models" ]; then
         for category in checkpoints loras controlnet vae embeddings insightface ultralytics; do

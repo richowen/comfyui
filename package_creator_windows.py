@@ -264,9 +264,40 @@ def install_requests_if_needed():
             return False
     return True
 
+def get_civitai_api_key():
+    """Get Civitai API key from environment variable or config file"""
+    # First try environment variable
+    api_key = os.environ.get("CIVITAI_API_KEY")
+    if api_key:
+        return api_key
+    
+    # Then try config file
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "civitai_config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                if config.get("api_key"):
+                    return config["api_key"]
+        except:
+            pass
+    
+    return None
+
 def download_with_requests(url, path, display_name):
     import requests
-    resp = requests.get(url, stream=True)
+    headers = {}
+    
+    # Add Civitai API key if downloading from Civitai
+    if "civitai.com" in url:
+        api_key = get_civitai_api_key()
+        if not api_key:
+            print("Civitai API key not found. Set CIVITAI_API_KEY environment variable or create civitai_config.json with an api_key field.")
+            print(f"Please download manually from {url} and place in {os.path.dirname(path)}")
+            return False
+        headers["Authorization"] = f"Bearer {api_key}"
+    
+    resp = requests.get(url, headers=headers, stream=True)
     total = int(resp.headers.get('content-length', 0))
     downloaded = 0
     
@@ -294,7 +325,7 @@ def download_with_requests(url, path, display_name):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 def download_with_urllib(url, path, display_name):
-    from urllib.request import urlopen
+    from urllib.request import urlopen, Request
     import ssl
     
     # Create a temporary file for downloading
@@ -306,6 +337,43 @@ def download_with_urllib(url, path, display_name):
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     
+    # Add Civitai API key if needed
+    if "civitai.com" in url:
+        api_key = get_civitai_api_key()
+        if not api_key:
+            print("Civitai API key not found. Set CIVITAI_API_KEY environment variable or create civitai_config.json with an api_key field.")
+            print(f"Please download manually from {url} and place in {os.path.dirname(path)}")
+            return False
+        request = Request(url)
+        request.add_header("Authorization", f"Bearer {api_key}")
+        try:
+            with urlopen(request, context=ctx) as response:
+                total = int(response.info().get('Content-Length', 0))
+                downloaded = 0
+                
+                with open(temp_file, 'wb') as f:
+                    while True:
+                        chunk = response.read(1024*1024)
+                        if not chunk:
+                            break
+                        downloaded += len(chunk)
+                        f.write(chunk)
+                        
+                        # Display progress
+                        done = int(50 * downloaded / total) if total > 0 else 50
+                        sys.stdout.write(f"\r{display_name}: [{'=' * done}{' ' * (50-done)}] {downloaded/1024/1024:.2f}MB/{total/1024/1024:.2f}MB")
+                        sys.stdout.flush()
+            
+            # Move from temp to final destination
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            shutil.move(temp_file, path)
+            sys.stdout.write(f"\r{display_name}: Download complete{' ' * 50}\n")
+            return True
+        except Exception as e:
+            print(f"Error downloading with API key: {e}")
+            return False
+    
+    # Regular download without API key
     try:
         with urlopen(url, context=ctx) as response:
             total = int(response.info().get('Content-Length', 0))
