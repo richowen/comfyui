@@ -16,7 +16,13 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-COMFYUI_DIR="$HOME/ComfyUI"
+# Detect if we're in RunPod and use /workspace if available
+if [ -d "/workspace" ] && [ -w "/workspace" ]; then
+    COMFYUI_DIR="/workspace/ComfyUI"
+    echo "RunPod environment detected, using /workspace directory"
+else
+    COMFYUI_DIR="$HOME/ComfyUI"
+fi
 CUSTOM_NODES_DIR="$COMFYUI_DIR/custom_nodes"
 MODELS_DIR="$COMFYUI_DIR/models"
 WORKFLOWS_DIR="$COMFYUI_DIR/workflows"
@@ -33,17 +39,33 @@ command_exists() {
 check_dependencies() {
     echo -e "${BLUE}Checking dependencies...${NC}"
     local missing_deps=()
-    for cmd in git python3 pip3 wget dialog jq; do
+    # Check for basic CLI tools
+    for cmd in git python3 pip3 wget dialog jq unzip; do
         if ! command_exists "$cmd"; then
             missing_deps+=("$cmd")
         fi
     done
-    if [ ${#missing_deps[@]} -ne 0 ]; then
-        echo -e "${YELLOW}Installing missing dependencies: ${missing_deps[*]}${NC}"
-        apt-get update
-        apt-get install -y "${missing_deps[@]}"
+    
+    # Check for OpenCV system dependencies
+    local opencv_deps="libgl1-mesa-glx libglib2.0-0"
+    
+    if [ ${#missing_deps[@]} -ne 0 ] || [ -n "$opencv_deps" ]; then
+        echo -e "${YELLOW}Installing missing dependencies...${NC}"
+        if [ "$(id -u)" -eq 0 ]; then
+            # Try to use apt-get if running as root
+            if apt-get update && apt-get install -y "${missing_deps[@]}" $opencv_deps; then
+                echo -e "${GREEN}All dependencies installed via apt-get.${NC}"
+            else
+                echo -e "${YELLOW}apt-get installation failed, will attempt to proceed anyway.${NC}"
+                echo -e "${YELLOW}Some features may not work correctly.${NC}"
+            fi
+        else
+            echo -e "${YELLOW}Not running as root. Cannot install system dependencies.${NC}"
+            echo -e "${YELLOW}Some features may not work correctly.${NC}"
+        fi
     fi
-    echo -e "${GREEN}All dependencies are installed.${NC}"
+    
+    echo -e "${GREEN}Dependency check completed.${NC}"
 }
 
 clone_comfyui() {
@@ -73,6 +95,10 @@ install_requirements() {
     
     # Set encoding for pip processes
     PYTHONIOENCODING=utf-8 pip3 install -r requirements.txt
+    
+    # Install additional required dependencies
+    echo -e "${BLUE}Installing additional dependencies (OpenCV, Numba)...${NC}"
+    PYTHONIOENCODING=utf-8 pip3 install opencv-python-headless numba
     
     echo -e "${GREEN}Python requirements installed.${NC}"
 }
@@ -191,7 +217,23 @@ download_custom_package() {
         return 1
     fi
     echo -e "${BLUE}Extracting custom package...${NC}"
-    unzip -q "$package_file" -d "$temp_dir/extracted"
+    if command_exists unzip; then
+        unzip -q "$package_file" -d "$temp_dir/extracted"
+    else
+        echo -e "${YELLOW}unzip utility not found, using Python for extraction...${NC}"
+        python3 -c "
+import zipfile
+import os
+import sys
+with zipfile.ZipFile('$package_file', 'r') as zip_ref:
+    os.makedirs('$temp_dir/extracted', exist_ok=True)
+    zip_ref.extractall('$temp_dir/extracted')
+"
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Failed to extract ZIP file. Please install unzip package manually.${NC}"
+            return 1
+        fi
+    fi
     if [ -d "$temp_dir/extracted/workflows" ]; then
         cp -r "$temp_dir/extracted/workflows/"* "$WORKFLOWS_DIR/"
     fi
@@ -207,8 +249,15 @@ download_custom_package() {
         done
     fi
     if [ -f "$temp_dir/extracted/download_models.py" ]; then
+        # Copy the downloader and the config
         cp "$temp_dir/extracted/download_models.py" "$COMFYUI_DIR/download_models.py"
         chmod +x "$COMFYUI_DIR/download_models.py"
+        
+        # Ensure config.json is also copied to the correct location for the script
+        if [ -f "$temp_dir/extracted/config.json" ]; then
+            cp "$temp_dir/extracted/config.json" "$COMFYUI_DIR/config.json"
+        fi
+        
         echo -e "${BLUE}Found external model downloader. Processing external models...${NC}"
         dialog --clear --backtitle "ComfyUI Setup" \
             --title "External Models" \
@@ -216,8 +265,25 @@ download_custom_package() {
             2>&1 >/dev/tty
         if [ $? -eq 0 ]; then
             echo -e "${BLUE}Downloading external models...${NC}"
+            echo -e "${BLUE}Installing required dependencies for model downloader...${NC}"
+            PYTHONIOENCODING=utf-8 pip3 install requests
+            
             cd "$COMFYUI_DIR"
             PYTHONIOENCODING=utf-8 python3 download_models.py
+            if [ $? -ne 0 ]; then
+                echo -e "${YELLOW}Model downloader script failed. Trying alternative download method...${NC}"
+                
+                # Copy the helper script
+                cp "$(dirname "$0")/comfyui-setup.sh.helper.py" "$COMFYUI_DIR/helper_download.py"
+                chmod +x "$COMFYUI_DIR/helper_download.py"
+                
+                # Run the helper script - use python3 directly in case chmod fails
+                PYTHONIOENCODING=utf-8 python3 "$COMFYUI_DIR/helper_download.py" --comfyui-dir "$COMFYUI_DIR" --config "$COMFYUI_DIR/config.json"
+                if [ $? -ne 0 ]; then
+                    echo -e "${YELLOW}Alternative download method also failed.${NC}"
+                    echo -e "${YELLOW}You can try running it manually later with: cd $COMFYUI_DIR && python3 helper_download.py${NC}"
+                fi
+            fi
         else
             echo -e "${YELLOW}Skipping external model downloads. You can run the downloader later with:${NC}"
             echo -e "cd $COMFYUI_DIR && python3 download_models.py"
@@ -325,6 +391,32 @@ python3 main.py --port $PORT --listen 0.0.0.0
 EOF
     chmod +x "$COMFYUI_DIR/start_comfyui.sh"
     echo -e "${GREEN}Launch script created at $COMFYUI_DIR/start_comfyui.sh${NC}"
+    
+    # If RunPod environment, create a handler script for automatic execution
+    if [ -d "/workspace" ] && [ -w "/workspace" ]; then
+        echo -e "${BLUE}Creating RunPod handler script...${NC}"
+        cat > "/workspace/handler.sh" << EOF
+#!/bin/bash
+# RunPod Handler Script
+
+# Set proper encoding
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export PYTHONIOENCODING=utf-8
+export CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES
+
+cd "$COMFYUI_DIR"
+python3 main.py --port 3000 --listen 0.0.0.0
+EOF
+        chmod +x "/workspace/handler.sh"
+        echo -e "${GREEN}RunPod handler script created at /workspace/handler.sh${NC}"
+        
+        # Create symbolic link for backward compatibility
+        if [ ! -f "/workspace/start_comfyui.sh" ]; then
+            ln -sf "$COMFYUI_DIR/start_comfyui.sh" "/workspace/start_comfyui.sh"
+            echo -e "${GREEN}Created symbolic link at /workspace/start_comfyui.sh${NC}"
+        fi
+    fi
 }
 
 tui_comfyui_options() {
@@ -475,8 +567,8 @@ tui_main_menu() {
 
 main() {
     if [ "$(id -u)" -ne 0 ]; then
-        echo -e "${RED}This script must be run as root. Please use sudo or run as root.${NC}"
-        exit 1
+        echo -e "${YELLOW}Warning: Not running as root. Some system-level installations may fail.${NC}"
+        echo -e "${YELLOW}Continuing in non-root mode. Some features may not work correctly.${NC}"
     fi
     if ! command_exists dialog; then
         echo -e "${YELLOW}Installing dialog package...${NC}"

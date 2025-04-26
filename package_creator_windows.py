@@ -282,13 +282,13 @@ def download_with_requests(url, path, display_name):
                 
                 # Display progress
                 done = int(50 * downloaded / total) if total > 0 else 50
-                sys.stdout.write(f"\\r{display_name}: [{'=' * done}{' ' * (50-done)}] {downloaded/1024/1024:.2f}MB/{total/1024/1024:.2f}MB")
+                sys.stdout.write(f"\r{display_name}: [{'=' * done}{' ' * (50-done)}] {downloaded/1024/1024:.2f}MB/{total/1024/1024:.2f}MB")
                 sys.stdout.flush()
         
         # Move from temp to final destination
         os.makedirs(os.path.dirname(path), exist_ok=True)
         shutil.move(temp_file, path)
-        sys.stdout.write(f"\\r{display_name}: Download complete{' ' * 50}\\n")
+        sys.stdout.write(f"\r{display_name}: Download complete{' ' * 50}\n")
     finally:
         # Clean up temp dir
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -321,13 +321,13 @@ def download_with_urllib(url, path, display_name):
                     
                     # Display progress
                     done = int(50 * downloaded / total) if total > 0 else 50
-                    sys.stdout.write(f"\\r{display_name}: [{'=' * done}{' ' * (50-done)}] {downloaded/1024/1024:.2f}MB/{total/1024/1024:.2f}MB")
+                    sys.stdout.write(f"\r{display_name}: [{'=' * done}{' ' * (50-done)}] {downloaded/1024/1024:.2f}MB/{total/1024/1024:.2f}MB")
                     sys.stdout.flush()
         
         # Move from temp to final destination
         os.makedirs(os.path.dirname(path), exist_ok=True)
         shutil.move(temp_file, path)
-        sys.stdout.write(f"\\r{display_name}: Download complete{' ' * 50}\\n")
+        sys.stdout.write(f"\r{display_name}: Download complete{' ' * 50}\n")
     finally:
         # Clean up temp dir
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -377,7 +377,7 @@ def main():
         expected_hash = model.get("hash")
         path_component = model.get("path")
         
-        print(f"\\n[{i+1}/{len(models)}] Processing {name}")
+        print(f"\n[{i+1}/{len(models)}] Processing {name}")
         
         # Determine destination path
         dest_dir = os.path.join(MODEL_ROOT, model_type)
@@ -410,7 +410,7 @@ def main():
             print(f"Error downloading {name}: {e}")
             print(f"Please download manually from {url} and place in {dest_dir}")
     
-    print("\\nDownload process complete.")
+    print("\nDownload process complete.")
     print("If any downloads failed, please download them manually from the URLs in config.json")
 
 if __name__ == "__main__":
