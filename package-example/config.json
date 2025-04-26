@@ -1,0 +1,35 @@
+{
+  "name": "Example ComfyUI Package",
+  "description": "A sample package with custom nodes, models, and workflows",
+  "version": "1.0.0",
+  "author": "Your Name",
+  
+  "dependencies": [
+    "pip:torch==2.0.1",
+    "pip:opencv-python==4.7.0.72",
+    "pip:transformers==4.30.2",
+    "apt:ffmpeg"
+  ],
+  
+  "gpu_settings": {
+    "vram_optimize": true,
+    "precision": "fp16",
+    "xformers": true
+  },
+  
+  "installation_order": [
+    "custom_nodes/ExampleNode1",
+    "custom_nodes/ExampleNode2"
+  ],
+  
+  "post_install_commands": [
+    "cd custom_nodes/ExampleNode1 && python setup.py install",
+    "mkdir -p /tmp/comfyui_temp"
+  ],
+  
+  "ui_settings": {
+    "theme": "dark",
+    "enable_experiments": true,
+    "auto_load_custom_nodes": true
+  }
+}

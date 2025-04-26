@@ -1,0 +1,34 @@
+{
+  "name": "Sample ComfyUI Configuration",
+  "description": "Sample configuration for ComfyUI custom package",
+  "version": "1.0.0",
+  "author": "Your Name",
+  
+  "dependencies": [
+    "pip:transformers==4.30.2",
+    "pip:opencv-python==4.7.0.72",
+    "pip:insightface==0.7.3"
+  ],
+  
+  "gpu_settings": {
+    "vram_optimize": true,
+    "precision": "fp16",
+    "xformers": true
+  },
+  
+  "installation_order": [
+    "custom_nodes/ComfyUI-Impact-Pack",
+    "custom_nodes/ComfyUI-Manager",
+    "custom_nodes/comfyui_controlnet_aux"
+  ],
+  
+  "post_install_commands": [
+    "cd custom_nodes/ComfyUI-Impact-Pack && python install.py"
+  ],
+  
+  "ui_settings": {
+    "theme": "dark",
+    "enable_experiments": true,
+    "auto_load_custom_nodes": true
+  }
+}
