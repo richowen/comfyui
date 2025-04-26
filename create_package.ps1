@@ -133,6 +133,7 @@ if ($proc.ExitCode -ne 0) {
 
 # --- Save API Key to Package ---
 if ($global:saveApiKeyToPackage -and $global:apiKeyForPackage) {
+    # Save to package directory
     $packageDir = Join-Path (Get-Location) $outputName
     if (Test-Path $packageDir -PathType Container) {
         $civitaiConfigPath = Join-Path $packageDir "civitai_config.json"
@@ -143,6 +144,11 @@ if ($global:saveApiKeyToPackage -and $global:apiKeyForPackage) {
         Set-Content -Path $civitaiConfigPath -Value $civitaiConfig
         Write-Host "Saved Civitai API key to package configuration." -ForegroundColor Green
     }
+    
+    # Also save to current working directory for download_models.py
+    $rootCivitaiConfigPath = Join-Path (Get-Location) "civitai_config.json"
+    Set-Content -Path $rootCivitaiConfigPath -Value $civitaiConfig
+    Write-Host "Saved Civitai API key to current directory for model downloads." -ForegroundColor Green
 }
 
 # --- Move ZIP to Save Directory ---
