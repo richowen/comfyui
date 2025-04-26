@@ -240,7 +240,7 @@ download_custom_package() {
     # Check for models directory and copy files
     if [ -d "$temp_dir/extracted/models" ]; then
         # Copy each model category if it exists
-        for category in checkpoints loras controlnet vae; do
+        for category in checkpoints loras controlnet vae embeddings insightface ultralytics; do
             if [ -d "$temp_dir/extracted/models/$category" ]; then
                 mkdir -p "$MODELS_DIR/$category"
                 cp -r "$temp_dir/extracted/models/$category/"* "$MODELS_DIR/$category/"
@@ -248,14 +248,40 @@ download_custom_package() {
         done
     fi
     
+    # Check for download_models.py script and process external models if exists
+    if [ -f "$temp_dir/extracted/download_models.py" ]; then
+        cp "$temp_dir/extracted/download_models.py" "$COMFYUI_DIR/download_models.py"
+        chmod +x "$COMFYUI_DIR/download_models.py"
+        
+        echo -e "${BLUE}Found external model downloader. Processing external models...${NC}"
+        
+        # Check if user wants to download external models
+        dialog --clear --backtitle "ComfyUI Setup" \
+            --title "External Models" \
+            --yesno "This package contains external models that need to be downloaded separately. Download them now?\n(This might take some time depending on model sizes)" 10 60 \
+            2>&1 >/dev/tty
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${BLUE}Downloading external models...${NC}"
+            cd "$COMFYUI_DIR"
+            python3 download_models.py
+        else
+            echo -e "${YELLOW}Skipping external model downloads. You can run the downloader later with:${NC}"
+            echo -e "cd $COMFYUI_DIR && python3 download_models.py"
+        fi
+    fi
+    
     # Check for config.json and process if needed
     if [ -f "$temp_dir/extracted/config.json" ]; then
         echo -e "${BLUE}Processing configuration from custom package...${NC}"
         
+        # Copy config.json to ComfyUI directory for reference
+        cp "$temp_dir/extracted/config.json" "$COMFYUI_DIR/package_config.json"
+        
         # Install dependencies from config.json
         if jq -e '.dependencies' "$temp_dir/extracted/config.json" >/dev/null 2>&1; then
             echo -e "${BLUE}Installing dependencies from config.json...${NC}"
-            local deps=$(jq -r '.dependencies[]' "$temp_dir/extracted/config.json")
+            local deps=$(jq -r '.dependencies[]' "$temp_dir/extracted/config.json" 2>/dev/null || echo "")
             for dep in $deps; do
                 if [[ "$dep" == pip:* ]]; then
                     # Handle pip dependencies
@@ -275,6 +301,64 @@ download_custom_package() {
             done
         fi
         
+        # Process external models directly from config.json if no download script
+        if [ ! -f "$temp_dir/extracted/download_models.py" ] && jq -e '.external_models' "$temp_dir/extracted/config.json" >/dev/null 2>&1; then
+            echo -e "${BLUE}Found external models in config.json${NC}"
+            
+            # Ask user if they want to download external models
+            dialog --clear --backtitle "ComfyUI Setup" \
+                --title "External Models" \
+                --yesno "This package references external models. Would you like to download them now?\n(This might take some time depending on model sizes)" 10 60 \
+                2>&1 >/dev/tty
+            
+            if [ $? -eq 0 ]; then
+                echo -e "${BLUE}Processing external models from config.json...${NC}"
+                
+                # Check if requests is installed
+                if ! python3 -c "import requests" >/dev/null 2>&1; then
+                    echo -e "${YELLOW}Installing Python requests module...${NC}"
+                    pip3 install requests
+                fi
+                
+                # Process each external model
+                local model_count=$(jq '.external_models | length' "$temp_dir/extracted/config.json")
+                echo -e "${BLUE}Found $model_count external models to download${NC}"
+                
+                for ((i=0; i<$model_count; i++)); do
+                    local model_name=$(jq -r ".external_models[$i].name" "$temp_dir/extracted/config.json")
+                    local model_type=$(jq -r ".external_models[$i].type" "$temp_dir/extracted/config.json")
+                    local model_url=$(jq -r ".external_models[$i].url" "$temp_dir/extracted/config.json")
+                    local model_path=$(jq -r ".external_models[$i].path // \"\"" "$temp_dir/extracted/config.json")
+                    
+                    # Create destination directory
+                    mkdir -p "$MODELS_DIR/$model_type"
+                    local dest_dir="$MODELS_DIR/$model_type"
+                    
+                    # Handle subdirectory if specified in path
+                    if [ ! -z "$model_path" ] && [[ "$model_path" == */* ]]; then
+                        local subdir=$(dirname "$model_path")
+                        mkdir -p "$dest_dir/$subdir"
+                        dest_dir="$dest_dir/$subdir"
+                    fi
+                    
+                    local dest_file="$dest_dir/$model_name"
+                    
+                    echo -e "${BLUE}Downloading $model_name from $model_url${NC}"
+                    
+                    # Download with progress using wget
+                    if ! wget --progress=bar:force -O "$dest_file" "$model_url"; then
+                        echo -e "${RED}Failed to download $model_name. Please download it manually from:${NC}"
+                        echo -e "${RED}$model_url${NC}"
+                        echo -e "${RED}And place it in: $dest_dir/${NC}"
+                    else
+                        echo -e "${GREEN}Successfully downloaded $model_name${NC}"
+                    fi
+                done
+            else
+                echo -e "${YELLOW}Skipping external model downloads.${NC}"
+            fi
+        fi
+        
         # Apply GPU settings if specified
         if jq -e '.gpu_settings' "$temp_dir/extracted/config.json" >/dev/null 2>&1; then
             echo -e "${BLUE}Applying GPU settings from config.json...${NC}"
@@ -292,12 +376,12 @@ download_custom_package() {
         # Run post-install commands if specified
         if jq -e '.post_install_commands' "$temp_dir/extracted/config.json" >/dev/null 2>&1; then
             echo -e "${BLUE}Running post-install commands from config.json...${NC}"
-            local commands=$(jq -r '.post_install_commands[]' "$temp_dir/extracted/config.json")
+            local commands=$(jq -r '.post_install_commands[]' "$temp_dir/extracted/config.json" 2>/dev/null || echo "")
             for cmd in "$commands"; do
                 echo -e "${BLUE}Running command: $cmd${NC}"
                 cd "$COMFYUI_DIR"
                 eval "$cmd"
-            done
+            fi
         fi
     fi
     
