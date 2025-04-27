@@ -1,71 +1,83 @@
 # ComfyUI Model Downloader
 
-This utility helps download external models specified in your `config.json` file for ComfyUI packages.
+A unified, robust Python script for downloading machine learning models for ComfyUI.
 
-## Configuration Files
+## Features
 
-### `config.json`
+- Automatically installs dependencies (requests) if missing
+- Supports Civitai API key authentication
+- Verifies file hashes when provided
+- Handles all model types and custom paths
+- Non-interactive and suitable for automation
+- Provides clear logging and progress reporting
+- Falls back to urllib if requests module isn't available
 
-The main package configuration file that includes a section for external models to download:
+## Usage
+
+### Basic Usage
+
+```bash
+python model_downloader.py
+```
+
+This will automatically look for a config.json file in the standard locations and process any model downloads defined there.
+
+### Advanced Usage
+
+```bash
+python model_downloader.py --comfyui-dir /path/to/comfyui --config /path/to/config.json
+```
+
+### Parameters
+
+- `--comfyui-dir`: Path to the ComfyUI installation directory (default: current directory)
+- `--config`: Path to a specific config.json file (default: looks in standard locations)
+
+## Config File Format
+
+The downloader uses a JSON configuration file with the following structure:
 
 ```json
 {
-  "package_name": "Your Package Name",
-  "package_description": "Package description",
-  "author": "Your Name",
-  "version": "1.0.0",
   "external_models": [
     {
-      "name": "model-name.safetensors",
+      "name": "model_filename.safetensors",
       "type": "checkpoints",
       "url": "https://example.com/path/to/model.safetensors",
-      "hash": "optional-md5-hash-for-verification"
+      "hash": "md5hash123456789",
+      "path": "optional/subdirectory/filename.safetensors"
+    },
+    {
+      "name": "another_model.safetensors",
+      "type": "loras",
+      "url": "https://civitai.com/api/download/models/12345"
     }
   ]
 }
 ```
 
-### `civitai_config.json`
+### Configuration Fields
 
-This file stores your Civitai API key for downloading models from Civitai:
+- `name`: The filename for the downloaded model
+- `type`: The model type (determines the subdirectory, e.g., "checkpoints", "loras", "controlnet", "vae")
+- `url`: The download URL for the model
+- `hash` (optional): MD5 hash for verification
+- `path` (optional): Custom path within the model type directory
+
+## Civitai API Authentication
+
+For downloading models from Civitai that require authentication:
+
+1. Create a file named `civitai_config.json` in the same directory as the script:
 
 ```json
 {
-  "api_key": "YOUR_CIVITAI_API_KEY_HERE"
+  "api_key": "your_civitai_api_key_here"
 }
 ```
 
-## API Key Configuration
+2. Or set the `CIVITAI_API_KEY` environment variable.
 
-When using the `create_package.ps1` script, you will be prompted if you want to use a Civitai API key. If you choose to use one:
+## Integration with comfyui-setup.sh
 
-1. The API key will be saved to `civitai_config.json` in your package directory
-2. The same API key will also be saved to `civitai_config.json` in the current working directory
-3. This allows the downloader to access the API key both when creating packages and when running locally
-
-## Usage
-
-Run the model downloader with:
-
-```
-python download_models.py
-```
-
-The script will:
-1. Check for `config.json` in the current directory
-2. Read the `external_models` section
-3. Download each model to the appropriate directory under `models/`
-4. Verify file hashes if provided
-
-## Civitai Downloads
-
-When downloading from Civitai, the script will:
-1. Look for a Civitai API key in the environment variable `CIVITAI_API_KEY`
-2. If not found, check for `civitai_config.json` in the current directory
-3. If neither is available, prompt you to download the model manually
-
-## Troubleshooting
-
-- If you encounter SyntaxError: "unterminated f-string literal", update to the latest version of the script
-- For download failures, check your network connection and API key configuration
-- The script creates temporary directories during downloads to ensure integrity
+The `comfyui-setup.sh` script uses this unified downloader for all model downloads, providing a consistent and reliable way to download models from various sources.

@@ -282,15 +282,11 @@ with zipfile.ZipFile('$package_file', 'r') as zip_ref:
             if [ $? -ne 0 ]; then
                 echo -e "${YELLOW}Model downloader script failed. Trying alternative download method...${NC}"
                 
-                # Copy the helper script
-                cp "$(dirname "$0")/comfyui-setup.sh.helper.py" "$COMFYUI_DIR/helper_download.py"
-                chmod +x "$COMFYUI_DIR/helper_download.py"
-                
-                # Run the helper script - use python3 directly in case chmod fails
-                PYTHONIOENCODING=utf-8 python3 "$COMFYUI_DIR/helper_download.py" --comfyui-dir "$COMFYUI_DIR" --config "$COMFYUI_DIR/config.json"
+                # Use the unified model downloader
+                PYTHONIOENCODING=utf-8 python3 "$(dirname "$0")/model_downloader.py" --comfyui-dir "$COMFYUI_DIR" --config "$COMFYUI_DIR/config.json"
                 if [ $? -ne 0 ]; then
-                    echo -e "${YELLOW}Alternative download method also failed.${NC}"
-                    echo -e "${YELLOW}You can try running it manually later with: cd $COMFYUI_DIR && python3 helper_download.py${NC}"
+                    echo -e "${YELLOW}Model download failed.${NC}"
+                    echo -e "${YELLOW}You can try running it manually later with: cd $COMFYUI_DIR && python3 model_downloader.py${NC}"
                 fi
             fi
         else
@@ -327,34 +323,19 @@ with zipfile.ZipFile('$package_file', 'r') as zip_ref:
                 2>&1 >/dev/tty
             if [ $? -eq 0 ]; then
                 echo -e "${BLUE}Processing external models from config.json...${NC}"
-                if ! python3 -c "import requests" >/dev/null 2>&1; then
-                    echo -e "${YELLOW}Installing Python requests module...${NC}"
-                    PYTHONIOENCODING=utf-8 pip3 install requests
+                echo -e "${BLUE}Installing required dependencies for model downloader...${NC}"
+                PYTHONIOENCODING=utf-8 pip3 install requests
+                
+                # Copy config to a predictable location
+                cp "$temp_dir/extracted/config.json" "$COMFYUI_DIR/config.json"
+                
+                # Use the unified model downloader
+                echo -e "${BLUE}Running unified model downloader...${NC}"
+                PYTHONIOENCODING=utf-8 python3 "$(dirname "$0")/model_downloader.py" --comfyui-dir "$COMFYUI_DIR" --config "$COMFYUI_DIR/config.json"
+                if [ $? -ne 0 ]; then
+                    echo -e "${YELLOW}Model download failed.${NC}"
+                    echo -e "${YELLOW}You can try running it manually later with: cd $COMFYUI_DIR && python3 $(dirname "$0")/model_downloader.py${NC}"
                 fi
-                local model_count=$(jq '.external_models | length' "$temp_dir/extracted/config.json")
-                echo -e "${BLUE}Found $model_count external models to download${NC}"
-                for ((i=0; i<$model_count; i++)); do
-                    local model_name=$(jq -r ".external_models[$i].name" "$temp_dir/extracted/config.json")
-                    local model_type=$(jq -r ".external_models[$i].type" "$temp_dir/extracted/config.json")
-                    local model_url=$(jq -r ".external_models[$i].url" "$temp_dir/extracted/config.json")
-                    local model_path=$(jq -r ".external_models[$i].path // \"\"" "$temp_dir/extracted/config.json")
-                    mkdir -p "$MODELS_DIR/$model_type"
-                    local dest_dir="$MODELS_DIR/$model_type"
-                    if [ ! -z "$model_path" ] && [[ "$model_path" == */* ]]; then
-                        local subdir=$(dirname "$model_path")
-                        mkdir -p "$dest_dir/$subdir"
-                        dest_dir="$dest_dir/$subdir"
-                    fi
-                    local dest_file="$dest_dir/$model_name"
-                    echo -e "${BLUE}Downloading $model_name from $model_url${NC}"
-                    if ! wget --progress=bar:force -O "$dest_file" "$model_url"; then
-                        echo -e "${RED}Failed to download $model_name. Please download it manually from:${NC}"
-                        echo -e "${RED}$model_url${NC}"
-                        echo -e "${RED}And place it in: $dest_dir/${NC}"
-                    else
-                        echo -e "${GREEN}Successfully downloaded $model_name${NC}"
-                    fi
-                done
             else
                 echo -e "${YELLOW}Skipping external model downloads.${NC}"
             fi
